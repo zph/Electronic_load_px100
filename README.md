@@ -7,6 +7,11 @@ Tested to work with board revisions 2.70 and 2.8
 
 See the [v2.70 binary Protocol description](protocol_PX-100_2_70.md)
 
+# Models compatible
+
+* DL24 180W Atorch Discharge Capacity Tester from AliExpress
+* PX100 150W Battery Discharge Capacity Tester
+
 # Control software
 
 ### Main features:
