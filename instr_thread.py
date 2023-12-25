@@ -4,6 +4,10 @@ from PyQt5.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 
 from instruments import Instruments
 
+import logging
+
+log = logging.getLogger(__name__)
+
 
 class InstrumentSignals(QObject):
     exit = pyqtSignal()

@@ -5,6 +5,10 @@ from PyQt5 import uic
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QSettings, Qt
 from PyQt5.QtWidgets import QGroupBox, QHeaderView
 from pandas import DataFrame
+import logging
+
+log = logging.getLogger(__name__)
+
 
 from instruments.instrument import Instrument
 
@@ -35,7 +39,7 @@ class InternalRTableModel(QAbstractTableModel):
         if self.rowCount(1):
             filename = "{}_internal_r_{}.csv".format(prefix, datetime.now().strftime("%Y%m%d_%H%M%S"))
             full_path = path.join(basedir, filename)
-            print("Write Internal R data to {}".format(path.relpath(full_path)))
+            log.debug("Write Internal R data to {}".format(path.relpath(full_path)))
             self._data.drop_duplicates().to_csv(full_path)
 
     def reset(self):
@@ -149,11 +153,11 @@ class InternalR(QGroupBox):
                 self._idle()
 
     def _calc_r(self):
-        print("-- Internal R --")
-        print(self.pre_acq)
-        print(self.zero_acq)
-        print(self.after_acq)
-        print(self.meas_pre_current)
+        log.debug("-- Internal R --")
+        log.debug(self.pre_acq)
+        log.debug(self.zero_acq)
+        log.debug(self.after_acq)
+        log.debug(self.meas_pre_current)
 
         if self.meas_pre_current > 0:
             r_a = (sum(self.zero_acq) -

@@ -4,6 +4,9 @@ from PyQt5.QtWidgets import QGroupBox
 
 from instruments.instrument import Instrument
 
+import logging
+
+log = logging.getLogger(__name__)
 
 class SwCCCV(QGroupBox):
     def __init__(self, *args, **kwargs):
@@ -38,7 +41,7 @@ class SwCCCV(QGroupBox):
         settings.sync()
 
     def reset(self):
-        print("swcccv_reset")
+        log.debug("swcccv_reset")
         self.tick = 0
         self.action_tick = 0
 
@@ -59,10 +62,10 @@ class SwCCCV(QGroupBox):
                 new_current = round(
                     max(data.lastval('current') * stepMultiplier, minCurrent),
                     2)
-                print("== Software CC-CV ==")
-                print("last_voltage {:4.3f} V, targetVoltage {:4.3f} V".format(
+                log.debug("== Software CC-CV ==")
+                log.debug("last_voltage {:4.3f} V, targetVoltage {:4.3f} V".format(
                     data.lastval('voltage'), targetVoltage))
-                print("new current {:4.3f}A".format(new_current))
+                log.debug("new current {:4.3f}A".format(new_current))
                 self.backend.send_command(
                     {Instrument.COMMAND_SET_CURRENT: new_current})
 

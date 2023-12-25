@@ -4,6 +4,11 @@ from os import path
 from pandas import DataFrame
 import pandas as pd
 
+import logging
+
+log = logging.getLogger(__name__)
+
+
 
 class DataStore:
     def __init__(self):
@@ -17,7 +22,7 @@ class DataStore:
         self.data = DataFrame()
 
     def append(self, row):
-        print(row)
+        log.debug(row)
         self.lastrow = row
         self.data = pd.concat([self.data, DataFrame.from_records([row])])
 
@@ -26,10 +31,10 @@ class DataStore:
         full_path = path.join(basedir, filename)
         export_rows = self.data.drop_duplicates()
         if export_rows.shape[0]:
-            print("Write RAW data to {}".format(path.relpath(full_path)))
+            log.debug("Write RAW data to {}".format(path.relpath(full_path)))
             self.data.drop_duplicates().to_csv(full_path)
         else:
-            print("no data")
+            log.debug("no data")
 
     def plot(self, **args):
         return self.data.plot(**args)

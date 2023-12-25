@@ -52,7 +52,7 @@ class LogControl(QGroupBox):
     def _display_path(self, sel_path):
         try:
             common = path.commonpath([self.home, sel_path])
-            print("common {} home {} sel {}".format(common, self.home, sel_path))
+            log.debug("common {} home {} sel {}".format(common, self.home, sel_path))
             if common == self.home and sel_path != self.home:
                 pretty_path = path.relpath(sel_path, start=self.home)
             else:

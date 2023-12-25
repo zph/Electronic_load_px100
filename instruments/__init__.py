@@ -4,6 +4,10 @@ import pyvisa as visa
 
 from instruments import px100
 
+import logging_config
+import logging
+
+log = logging.getLogger(__name__)
 
 class Instruments:
     def __init__(self):
@@ -19,13 +23,13 @@ class Instruments:
             return self.instruments[0]
 
     def discover(self):
-        print("Detecting instruments...")
+        log.debug("Detecting instruments...")
         for i in self.rm.list_resources():
-            print(i)
+            log.debug(i)
             try:
                 inst = self.rm.open_resource(i)
             except:
-                print("err opening instrument")
+                log.debug("err opening instrument")
                 continue
 
             if not isinstance(inst, visa.resources.Resource):
@@ -35,22 +39,22 @@ class Instruments:
                 driver = px100.PX100(inst)  #Todo: loop over drivers if multiple
                 if driver.probe():
                     self.instruments.append(driver)
-                    print("found " + driver.name)
+                    log.debug("found " + driver.name)
                 else:
-                    print("ko")
+                    log.debug("ko")
             except Exception as inst:
-                print(type(inst))  # the exception instance
-                print(inst.args)  # arguments stored in .args
-                print(inst)
-                print("err")
+                log.debug(type(inst))  # the exception instance
+                log.debug(inst.args)  # arguments stored in .args
+                log.debug(inst)
+                log.debug("err")
                 try:
                     inst.close()
                 except Exception as inst:
-                    print(type(inst))  # the exception instance
-                    print(inst.args)  # arguments stored in .args
-                    print(inst)
-                    print("no close")
+                    log.debug(type(inst))  # the exception instance
+                    log.debug(inst.args)  # arguments stored in .args
+                    log.debug(inst)
+                    log.debug("no close")
 
         else:
             if len(self.instruments) == 0:
-                print("No instruments found")
+                log.debug("No instruments found")

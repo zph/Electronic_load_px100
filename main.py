@@ -7,6 +7,7 @@ from data_store import DataStore
 from gui.gui import GUI
 from instr_thread import InstrumentWorker
 
+import logging_config
 
 class Main:
     def __init__(self):
