@@ -2,6 +2,7 @@ from datetime import datetime
 from os import path
 
 from pandas import DataFrame
+import pandas as pd
 
 
 class DataStore:
@@ -18,7 +19,7 @@ class DataStore:
     def append(self, row):
         print(row)
         self.lastrow = row
-        self.data = self.data.append(row, ignore_index=True)
+        self.data = pd.concat([self.data, DataFrame.from_records([row])])
 
     def write(self, basedir, prefix):
         filename = "{}_raw_{}.csv".format(prefix, datetime.now().strftime("%Y%m%d_%H%M%S"))
