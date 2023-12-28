@@ -22,11 +22,14 @@ from matplotlib.figure import Figure
 from datetime import time
 
 from instruments.instrument import Instrument
+from instruments.px100 import PX100
 from gui.swcccv import SwCCCV
 from gui.internal_r import InternalR
 from gui.log_control import LogControl
 from sys import argv
 
+import logging
+log = logging.getLogger(__name__)
 
 class MplCanvas(FigureCanvasQTAgg):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
@@ -72,6 +75,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_timer.timeChanged.connect(self.timer_changed)
         self.resetButton.clicked.connect(self.reset_dev)
 
+        self.set_enabled = QTimer(singleShot=True,
+                                        timeout=self.enabled_set)
         self.set_voltage_timer = QTimer(singleShot=True,
                                         timeout=self.voltage_set)
         self.set_current_timer = QTimer(singleShot=True,
@@ -138,9 +143,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def enabled_changed(self):
         if self.en_checkbox.hasFocus():
-            value = self.en_checkbox.isChecked()
-            self.en_checkbox.clearFocus()
-            self.backend.send_command({Instrument.COMMAND_ENABLE: value})
+            self.set_enabled_timer.start(1000)
+
+    def enabled_set(self):
+        value = True
+        self.en_checkbox.clearFocus()
+        log.info(f"ENABLE LOAD TEST GUI post-if: {Instrument.COMMAND_ENABLE} {value}")
+        self.backend.send_command({Instrument.COMMAND_ENABLE: value})
 
     def voltage_changed(self):
         if self.set_voltage.hasFocus():

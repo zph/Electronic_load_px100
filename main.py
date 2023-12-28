@@ -7,7 +7,13 @@ from data_store import DataStore
 from gui.gui import GUI
 from instr_thread import InstrumentWorker
 
+from instruments.instrument import Instrument
+
 import logging_config
+import time
+
+import logging
+log = logging.getLogger(__name__)
 
 class Main:
     def __init__(self):
@@ -42,6 +48,8 @@ class Main:
                 r.status_update(status)
 
     def send_command(self, command):
+        log.info(f"MAIN COMMAND: {command}")
+
         self.instr_worker.signals.command.emit(command)
 
     def at_exit(self):

@@ -4,7 +4,6 @@ import pyvisa as visa
 
 from instruments import px100
 
-import logging_config
 import logging
 
 log = logging.getLogger(__name__)

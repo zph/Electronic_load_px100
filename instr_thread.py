@@ -35,6 +35,8 @@ class InstrumentWorker(QRunnable):
     def run(self):
         instruments = Instruments()
         self.instr = instruments.instr()
+        log.info(f"RUN instr_thread: {self.commands}")
+        # TODO: loop until we find an instrument
         if not self.instr:
             self.signals.status_update.emit("No devices found")
             return
@@ -42,8 +44,10 @@ class InstrumentWorker(QRunnable):
         self.signals.status_update.emit("Connected to {} on {}".format(self.instr.name, self.instr.port))
         while self.loop:
             if len(self.commands) > 0:
+                log.info(f"RUN LOOP instr_thread: {self.commands}")
                 self.handle_command(self.commands.pop(0))
             if self.running:
+                log.info(f"RUN LOOP readAll")
                 self.signals.data_row.emit(self.instr.readAll())
             sleep(.5)
 

@@ -5,17 +5,22 @@ licensed as GPLv3
 """
 
 from datetime import time
+from datetime import datetime
 from math import modf
 from numbers import Number
 from time import sleep
+from functools import reduce
 
 import pyvisa as visa
 
 from instruments.instrument import Instrument
 
+import logging
+log = logging.getLogger(__name__)
 
 class PX100(Instrument):
 
+    # Reading values
     ISON = 0x10
     VOLTAGE = 0x11
     CURRENT = 0x12
@@ -27,6 +32,7 @@ class PX100(Instrument):
     LIM_VOLT = 0x18
     TIMER = 0x19
 
+    # Command values
     OUTPUT = 0x01
     SETCURR = 0x02
     SETVCUT = 0x03
@@ -92,10 +98,41 @@ class PX100(Instrument):
         Instrument.COMMAND_RESET: 'cap_ah',
     }
 
+    RESET_WH = 'RESET_WH'
+    RESET_AH = 'RESET_AH'
+    RESET_DURATION = 'RESET_DURATION'
+    RESET_ALL = 'RESET_ALL'
+    BACKLIGHT_TIME = 'BACKLIGHT_TIME'
+    SET_PRICE = 'SET_PRICE'
+    SETUP_OR_LEFT_BUTTON = 'SETUP_OR_LEFT_BUTTON'
+    ENTER_BUTTON = 'ENTER_BUTTON'
+    PLUS_BUTTON = 'PLUS_BUTTON'
+    MINUS_BUTTON = 'MINUS_BUTTON'
+
+    STANDARD_COMMANDS = {
+        RESET_WH: 0x01,
+        RESET_AH: 0x02,
+        RESET_DURATION: 0x03,
+        'NO-OP': 0x04,
+        RESET_ALL: 0x05,
+        'NO-OP': 0x11,
+        'NO-OP': 0x12,
+        BACKLIGHT_TIME: 0x21,
+        SET_PRICE: 0x22,
+        SETUP_OR_LEFT_BUTTON: 0x31,
+        ENTER_BUTTON: 0x32,
+        PLUS_BUTTON: 0x33,
+        MINUS_BUTTON: 0x34,
+
+    }
+
+    # Max wattage to avoid cutoff of 185W on a 180W DL24P
+    MAX_WATTS = 170.0
+
     def __init__(self, device):
-        log.debug(device)
+        log.debug(f"DEVICE: {device}")
         self.device = device
-        self.name = "PX100"
+        self.name = "PX100" # TODO remove hard coding and switch on different profiles of device
         self.aux_index = 0
         self.data = {
             'is_on': 0.,
@@ -131,6 +168,9 @@ class PX100(Instrument):
         else:
             self.update_val(PX100.AUX_VALS[self.__next_aux()])
 
+        self.data["ts"] = datetime.now()
+        self.data["watts"] = self.data["current"] * self.data["voltage"]
+        self.data["voltage_cutoff"] = self.data["set_voltage"]
         return self.data
 
     def update_vals(self, keys):
@@ -143,10 +183,11 @@ class PX100(Instrument):
             self.data[key] = value
 
     def command(self, command, value):
+        log.info(f"COMMAND: {command}, VALUE: {value}")
         if command not in (PX100.COMMANDS.keys()):
             return False
 
-        for i in range(0, 3):
+        for _i in range(0, 3):
             self.setVal(PX100.COMMANDS[command], value)
             sleep(0.5)
             self.update_val(PX100.VERIFY_CMD[command])
@@ -187,6 +228,7 @@ class PX100(Instrument):
             return int.from_bytes(ret[2:5], byteorder='big') / mult
 
     def setVal(self, command, value):
+        log.info(f"SET_VALUE COMMAND: {command}, VALUE: {value}")
         if isinstance(value, float):
             f, i = modf(value)
             value = [int(i), round(f * 100)]
@@ -197,7 +239,9 @@ class PX100(Instrument):
             value = [0x01, 0x00]
         else:
             value = value.to_bytes(2, byteorder='big')
+        log.info(f"SET_VALUE COMMAND: {command}, VALUE: {value}")
         ret = self.writeFunction(command, value)
+        log.info(f"SET_VALUE response: {ret}")
         return ret == 0x6F
 
     def writeFunction(self, command, value):
@@ -206,6 +250,7 @@ class PX100(Instrument):
         else:
             resp_len = 1
 
+        # TODO: final frame should be the checksum
         frame = bytearray([0xB1, 0xB2, command, *value, 0xB6])
         try:
             self.device.write_raw(frame)
@@ -256,3 +301,139 @@ class PX100(Instrument):
 
     def __is_number(self, value):
         return isinstance(value, Number) and not isinstance(value, bool)
+
+    #####
+    # Commands
+    #####
+    def reset_wh(self):
+        return self.execute(self.RESET_WH)
+
+    def reset_ah(self):
+        return self.execute(self.RESET_AH)
+
+    def reset_duration(self):
+        return self.execute(self.RESET_DURATION)
+
+    def reset_all(self):
+        return self.execute(self.RESET_ALL)
+
+    def set_cutoff_voltage(self, value):
+        self.setVal(self.COMMANDS[Instrument.COMMAND_SET_VOLTAGE], value)
+
+    def set_constant_current(self, value):
+        self.setVal(self.COMMANDS[Instrument.COMMAND_SET_CURRENT], value)
+
+    def set_timer(self, value):
+        self.setVal(self.COMMANDS[Instrument.COMMAND_SET_TIMER], value)
+
+    def set_watts(self, value):
+        # Check current watts
+        # If not enabled, return false
+        data = self.get_readings()
+        if value > self.MAX_WATTS:
+            value = self.MAX_WATTS
+        if data['is_on'] != 1:
+            return False
+
+        # Call multiple times to narrow in on the value even after voltage sag
+        self._watt_setter(value)
+        self._watt_setter(value)
+        return self._watt_setter(value)
+
+    def _watt_setter(self, desired_watts):
+        data = self.get_readings()
+        wattage = round(data['watts'])
+        volt = data['voltage']
+
+        if wattage == desired_watts:
+            return round(data['watts'], 3)
+        else:
+            desired_amps = round(desired_watts / volt, 3)
+            log.info(f"Desired amps: {desired_amps}")
+            self.set_constant_current(desired_amps)
+            sleep(1)
+            new_watts = round(self.get_readings()['watts'], 3)
+
+            return new_watts
+
+
+    def maintain_constant_power(self, watts):
+        cont = True
+        # Set watts returns false if no load test running
+        while cont:
+            cont = self.set_watts(watts)
+            sleep(1)
+
+    def get_internal_resistance_milli_ohm(self, max_amps = 2.0):
+        # 7.10.2 of ISO 69951-2 2003 Defines internal resistance measurement
+        # Source: https://www.accu-select.de/KUNDEN-DOWNLOAD/Akku-Norm%20EN%2069951-2/EN61951-2Y2003_1f.pdf
+        # It is most useful when measured multiple times on same pack through its lifetime
+        # and indicates when a pack is near EOL
+        # Procedure is essentially 2 step DC amp application followed by v measurements
+        # - Low voltage for 10s
+        # increasing by duration_padding to allow for settings change timing
+        # Setting current and reading voltage is repeated to ensure the values are active values because
+        # during testing the values were not updating accurately
+        DURATION_PADDING = 3
+        I1 = max_amps / 10
+        I2 = max_amps
+        self.enable()
+        sleep(3)
+        self.set_constant_current(I1)
+        self.set_constant_current(I1)
+        self.set_constant_current(I1)
+        sleep(10 + DURATION_PADDING)
+        _ = self.readAll(True)['voltage']
+        _ = self.readAll(True)['voltage']
+        U1 = self.readAll(True)['voltage']
+        self.set_constant_current(I2)
+        self.set_constant_current(I2)
+        self.set_constant_current(I2)
+        # Note should be 3s
+        sleep(5 + DURATION_PADDING)
+        _ = self.readAll(True)['voltage']
+        _ = self.readAll(True)['voltage']
+        U2 = self.readAll(True)['voltage']
+        self.disable()
+        R_DC = round((U1 - U2) / (I2 - I1) * 1000, 2) # for mOhm
+        return {R_DC, 'mOhm'}
+
+
+    def push_setup_or_left_button(self):
+        return self.execute(self.SETUP_OR_LEFT_BUTTON)
+
+    def push_enter_on_off_button(self):
+        return self.execute(self.ENTER_BUTTON)
+
+    def enable(self):
+        self.turnOn()
+
+    def disable(self):
+        self.turnOff()
+
+    def enable_load(self):
+        return self.turnOn()
+
+    def disable_load(self):
+        return self.turnOff()
+
+    def push_plus_button(self):
+        return self.execute(self.PLUS_BUTTON)
+
+    def push_minus_button(self):
+        return self.execute(self.MINUS_BUTTON)
+
+    def get_readings(self):
+        return self.readAll(read_all_aux=True)
+
+    def execute(self, command, *values):
+        return self.raw_writer(self.command_frame(self.STANDARD_COMMANDS[command], *values))
+
+    def command_frame(self, command_int, *values):
+        padded_values = [0x00, 0x00, 0x00, 0x00]
+        for i, v in enumerate(values):
+            padded_values[i] = v
+        frame = [0xff, 0x55, 0x11, 0x02, command_int, *padded_values]
+        checksum = (((frame[2] & 255) + (frame[3] & 255) + (frame[4] & 255) + (frame[5] & 255) + (frame[6] & 255) + (frame[7] & 255) + (frame[8] & 255)) ^ 68)
+        frame.append(checksum)
+        return bytearray(frame)

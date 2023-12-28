@@ -1,4 +1,7 @@
 import logging.config
+import os
+
+log_level = os.environ.get("LOG_LEVEL", "DEBUG")
 
 LOGGING = {
     "version": 1,
@@ -15,7 +18,7 @@ LOGGING = {
             "formatter": "json",
         }
     },
-    "loggers": {"": {"handlers": ["stdout"], "level": "DEBUG"}},
+    "loggers": {"": {"handlers": ["stdout"], "level": log_level}},
 }
 
 

@@ -50,14 +50,20 @@ class SwCCCV(QGroupBox):
         backend.subscribe(self)
 
     def data_row(self, data, row):
+        log.info(f"Top level SW CC CV loop: is_on={data.lastval('is_on')} voltage={data.lastval('voltage')} set_current={data.lastval('set_current')}")
         if data and self.isChecked() and data.lastval('is_on'):
+            log.info("SW CC CV loop")
             self.tick += 1
 
             minCurrent = round(self.minCurrent.value(), 2)
             stepMultiplier = round(self.stepMultiplier.value(), 2)
             targetVoltage = round(self.targetVoltage.value(), 2)
+            log.info(f"""Conditional: {(data.lastval('voltage') < targetVoltage)} {(
+                    data.lastval('set_current') > minCurrent)} and {self._can_act()}""")
             if (data.lastval('voltage') < targetVoltage) and (
                     data.lastval('set_current') > minCurrent) and self._can_act():
+
+                log.info("Inner SW CC CV loop")
                 self.action_tick = self.tick
                 new_current = round(
                     max(data.lastval('current') * stepMultiplier, minCurrent),

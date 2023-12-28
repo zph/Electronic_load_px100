@@ -1,10 +1,12 @@
 from datetime import datetime
 from os import path
+import json
 
 from pandas import DataFrame
 import pandas as pd
 
 import logging
+from settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +24,14 @@ class DataStore:
         self.data = DataFrame()
 
     def append(self, row):
-        log.debug(row)
+        row["ts"] = datetime.now()
+        row_json = json.dumps(row, default=str)
+        log.info(f"ROW: {row_json}")
+
+        with open(f"""{get_settings()["cell_label"]}.jsonl""", "a") as f:
+            f.write(row_json)
+            f.write("\n")
+
         self.lastrow = row
         self.data = pd.concat([self.data, DataFrame.from_records([row])])
 
