@@ -170,7 +170,7 @@ class PX100(Instrument):
             self.update_val(PX100.AUX_VALS[self.__next_aux()])
 
         self.data["ts"] = datetime.now()
-        self.data["watts"] = self.data["current"] * self.data["voltage"]
+        self.data["watts"] = round(self.data["current"] * self.data["voltage"], 3)
         self.data["voltage_cutoff"] = self.data["set_voltage"]
         return self.data
 
@@ -347,8 +347,6 @@ class PX100(Instrument):
         self.setVal(self.COMMANDS[Instrument.COMMAND_SET_TIMER], value)
 
     def set_watts(self, value):
-        # Check current watts
-        # If not enabled, return false
         data = self.get_readings()
         if value > self.MAX_WATTS:
             value = self.MAX_WATTS
@@ -356,11 +354,11 @@ class PX100(Instrument):
             return False
 
         # Call multiple times to narrow in on the value even after voltage sag
-        self._watt_setter(value)
-        self._watt_setter(value)
-        return self._watt_setter(value)
+        self.set_watts_once(value)
+        self.set_watts_once(value)
+        return self.set_watts_once(value)
 
-    def _watt_setter(self, desired_watts):
+    def set_watts_once(self, desired_watts):
         data = self.get_readings()
         wattage = round(data['watts'])
         volt = data['voltage']
@@ -376,7 +374,6 @@ class PX100(Instrument):
 
             return new_watts
 
-
     def maintain_constant_power(self, watts):
         cont = True
         # Set watts returns false if no load test running
@@ -385,18 +382,30 @@ class PX100(Instrument):
             sleep(1)
 
     def get_internal_resistance_milli_ohm(self, max_amps = 2.0):
-        # 7.10.2 of ISO 69951-2 2003 Defines internal resistance measurement
+        # 7.10.2 of EU EN Standard 69951-2 2003 Defines internal resistance measurement
         # Source: https://www.accu-select.de/KUNDEN-DOWNLOAD/Akku-Norm%20EN%2069951-2/EN61951-2Y2003_1f.pdf
+        # and https://batteryuniversity.com/article/bu-902-how-to-measure-internal-resistance
+        # > 7.10.2 Measurement of the internal d.c. resistance
+        # > The cell shall be discharged at a constant current of value I1.as specified in Table 17. At the
+        # > end of a discharge period of 10 s, the voltage U1 during discharge shall be measured and
+        # > recorded. The discharge current shall then be immediately increased to a constant value of I2
+        # > as specified in Table 17 and the corresponding voltage U2 during discharge shall be
+        # > measured and recorded again at the end of a discharge period of 3 s.
+        # > The internal d.c. resistance, Rdc, of the cell shall be calculated using the following formula:
+        # > R_DC = ((U1 - U2) / (I2 - I1)) Ω
+        # > where
+        # > I1, I2 are the constant discharge currents;
+        # > U1, U2 are the appropriate voltages measured during discharge.
+
         # It is most useful when measured multiple times on same pack through its lifetime
         # and indicates when a pack is near EOL
-        # Procedure is essentially 2 step DC amp application followed by v measurements
-        # - Low voltage for 10s
+        # Procedure is essentially 2 step DC amp application followed by V measurements
         # increasing by duration_padding to allow for settings change timing
         # Setting current and reading voltage is repeated to ensure the values are active values because
         # during testing the values were not updating accurately
         DURATION_PADDING = 3
-        I1 = max_amps / 10
         I2 = max_amps
+        I1 = I2 / 10
         self.enable()
         sleep(3)
         self.set_constant_current(I1)
@@ -415,7 +424,7 @@ class PX100(Instrument):
         _ = self.readAll(True)['voltage']
         U2 = self.readAll(True)['voltage']
         self.disable()
-        R_DC = round((U1 - U2) / (I2 - I1) * 1000, 2) # for mOhm
+        R_DC = round((U1 - U2) / (I2 - I1) * 1000, 3) # for mOhm
         return {R_DC, 'mOhm'}
 
 
@@ -432,10 +441,10 @@ class PX100(Instrument):
         self.turnOff()
 
     def enable_load(self):
-        return self.turnOn()
+        return self.enable()
 
     def disable_load(self):
-        return self.turnOff()
+        return self.disable()
 
     def push_plus_button(self):
         return self.execute(self.PLUS_BUTTON)
