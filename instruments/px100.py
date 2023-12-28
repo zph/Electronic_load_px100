@@ -38,6 +38,7 @@ class PX100(Instrument):
     SETVCUT = 0x03
     SETTMR = 0x04
     RESETCNT = 0x05
+    # Unknown beyond this point, no response from device
 
     ENABLED = 0x0100
     DISABLED = 0x0000
@@ -244,6 +245,10 @@ class PX100(Instrument):
         log.info(f"SET_VALUE response: {ret}")
         return ret == 0x6F
 
+
+    def checksum(self, frame):
+        return reduce(lambda x, y: (x & 255) + y, frame[2:]) ^ 68
+
     def writeFunction(self, command, value):
         if command >= 0x10:
             resp_len = 7
@@ -262,12 +267,27 @@ class PX100(Instrument):
             log.debug("error reading bytes")
             return False
 
+
+    def raw_writer(self, b_array):
+        if b_array[2] >= 0x10:
+            resp_len = 7
+        else:
+            resp_len = 4
+        self.device.write_raw(b_array)
+        return self.device.read_bytes(resp_len)
+
+    def turnOn(self):
+        log.debug("turnon")
+        self.setVal(PX100.OUTPUT, PX100.ENABLED)
+
+    def turnOff(self):
+        self.turnOFF()
+
     def turnOFF(self):
         log.debug("turnoff")
         self.setVal(PX100.OUTPUT, PX100.DISABLED)
 
     def close(self):
-        self.turnOFF()
         sleep(.2)
         self.device.close()
 
@@ -434,6 +454,5 @@ class PX100(Instrument):
         for i, v in enumerate(values):
             padded_values[i] = v
         frame = [0xff, 0x55, 0x11, 0x02, command_int, *padded_values]
-        checksum = (((frame[2] & 255) + (frame[3] & 255) + (frame[4] & 255) + (frame[5] & 255) + (frame[6] & 255) + (frame[7] & 255) + (frame[8] & 255)) ^ 68)
-        frame.append(checksum)
+        frame.append(self.checksum(frame))
         return bytearray(frame)
