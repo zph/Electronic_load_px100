@@ -18,6 +18,7 @@ from instruments.instrument import Instrument
 import logging
 log = logging.getLogger(__name__)
 
+from message_parser import UrMessage
 class PX100(Instrument):
 
     # Reading values
@@ -210,6 +211,7 @@ class PX100(Instrument):
         elif (len(ret) == 1 and ret[0] == 0x6F):
             log.debug("setval")
             return False
+        # Expected shape [0xCA, 0xCB, _, _, _, 0xCE, 0xCF]
         elif (len(ret) < 7 or ret[0] != 0xCA or ret[1] != 0xCB
               or ret[5] != 0xCE or ret[6] != 0xCF):
             log.debug("Receive error")
@@ -220,6 +222,7 @@ class PX100(Instrument):
         except:
             mult = 1000.
 
+        # Expected shape [0xCA, 0xCB, HH, MM, SS, 0xCE, 0xCF]
         if (command == PX100.TIME or command == PX100.TIMER):
             hh = ret[2]
             mm = ret[3]
@@ -427,6 +430,33 @@ class PX100(Instrument):
         R_DC = round((U1 - U2) / (I2 - I1) * 1000, 3) # for mOhm
         return {R_DC, 'mOhm'}
 
+    def discharge_to_voltage(self, target_voltage, starting_watts=5.0):
+        self.set_watts_once(starting_watts)
+
+        volts_without_load = self.get_readings()['voltage']
+
+        self.enable()
+
+        sleep(5)
+
+        volts_with_load = self.get_readings()['voltage']
+        volt_delta = volts_without_load - volts_with_load
+
+        target_voltage_under_load = target_voltage - volt_delta
+
+        log.info(f"Discharge to Voltage: with: {volts_with_load} without: {volts_without_load} and target v under load {target_voltage_under_load}")
+        while True:
+            sleep(5)
+
+            volts = self.get_readings()['voltage']
+            if target_voltage_under_load > volts:
+                break
+
+        self.disable()
+        sleep(5)
+        volts = self.get_readings()['voltage']
+        return(volts)
+        # Every N seconds, stop procedure
 
     def push_setup_or_left_button(self):
         return self.execute(self.SETUP_OR_LEFT_BUTTON)
@@ -454,6 +484,24 @@ class PX100(Instrument):
 
     def get_readings(self):
         return self.readAll(read_all_aux=True)
+
+    # Do not use
+    # These are the broadcast reports provided by DL24P devices
+    # but they have inferior resolution compared to get_readings()
+    # Generally there are 1-2 less places of precision.
+    REPORT_BYTES = 36
+    def get_report(self, debug=False):
+        for _attempt in range(10):
+            try:
+                report = self.device.read_bytes(self.REPORT_BYTES)
+            except:
+                log.warn("Retrying serial connection read")
+            else:
+              break #success
+        if debug:
+            return [UrMessage.parse(report).payload.payload.report_data, report]
+        else:
+            return UrMessage.parse(report).payload.payload.report_data
 
     def execute(self, command, *values):
         return self.raw_writer(self.command_frame(self.STANDARD_COMMANDS[command], *values))

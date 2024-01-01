@@ -6,3 +6,4 @@ pyvisa
 pyvisa-py
 pyserial
 zeroconf
+construct
