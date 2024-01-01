@@ -430,6 +430,7 @@ class PX100(Instrument):
         R_DC = round((U1 - U2) / (I2 - I1) * 1000, 3) # for mOhm
         return {R_DC, 'mOhm'}
 
+    # Experimental and not yet working correctly
     def discharge_to_voltage(self, target_voltage, starting_watts=5.0):
         self.set_watts_once(starting_watts)
 
